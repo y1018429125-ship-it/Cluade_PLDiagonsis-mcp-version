@@ -1,0 +1,31 @@
+tool:
+  name: "IcingDiagnosisTool"
+  display_name: "覆冰监测"
+  description: "查询线路走廊气象数据，分析覆冰风险"
+  category: "environmental"
+  adapter:
+    type: "mcp"
+    config:
+      url: "http://localhost:8002"
+      timeout: 30
+  output_schema:
+    type: "structured"
+    fields:
+      - name: "temperature"
+        type: "float"
+        description: "温度(°C)"
+      - name: "humidity"
+        type: "float"
+        description: "湿度(%)"
+      - name: "wind_speed"
+        type: "float"
+        description: "风速(m/s)"
+      - name: "icing_thickness"
+        type: "float"
+        description: "覆冰厚度(mm)"
+      - name: "icing_risk_level"
+        type: "string"
+        description: "覆冰风险等级"
+  report_mapping:
+    chapter: "诊断证据"
+    render_template: "table"

@@ -1,0 +1,28 @@
+tool:
+  name: "BirdDamageDiagnosisTool"
+  display_name: "鸟害监测"
+  description: "查询线路走廊鸟类活动数据，分析鸟害风险"
+  category: "biological"
+  adapter:
+    type: "mcp"
+    config:
+      url: "http://localhost:8004"
+      timeout: 30
+  output_schema:
+    type: "structured"
+    fields:
+      - name: "bird_species_count"
+        type: "int"
+        description: "鸟类种类数"
+      - name: "activity_level"
+        type: "string"
+        description: "活动强度"
+      - name: "nesting_sites"
+        type: "int"
+        description: "鸟巢数量"
+      - name: "damage_history"
+        type: "string"
+        description: "历史鸟害记录"
+  report_mapping:
+    chapter: "诊断证据"
+    render_template: "table"

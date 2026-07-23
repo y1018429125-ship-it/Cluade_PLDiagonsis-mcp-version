@@ -1,0 +1,40 @@
+tool:
+  name: "WeatherDiagnosisTool"
+  display_name: "天气诊断"
+  description: "通过浏览器访问百度查询指定城市天气状况，包括温度、湿度、天气状况、风向风力等"
+  category: "environmental"
+  adapter:
+    type: "custom"
+    config:
+      module: "src.infrastructure.adapters.browser_agent_adapter"
+      class: "BrowserAgentAdapter"
+      # demo 阶段固定查询城市
+      default_city: "武汉"
+      # 浏览器配置
+      headless: true
+      max_steps: 10
+      step_timeout: 30
+  output_schema:
+    type: "structured"
+    fields:
+      - name: "city"
+        type: "string"
+        description: "城市名"
+      - name: "temperature"
+        type: "float"
+        description: "温度(°C)"
+      - name: "humidity"
+        type: "float"
+        description: "湿度(%)"
+      - name: "condition"
+        type: "string"
+        description: "天气状况"
+      - name: "wind_direction"
+        type: "string"
+        description: "风向"
+      - name: "wind_level"
+        type: "string"
+        description: "风力等级"
+  report_mapping:
+    chapter: "诊断证据"
+    render_template: "table"

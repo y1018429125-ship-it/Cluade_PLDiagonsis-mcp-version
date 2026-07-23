@@ -1,0 +1,31 @@
+tool:
+  name: "LightningDiagnosisTool"
+  display_name: "雷电定位"
+  description: "查询线路走廊附近雷电活动数据，包括雷击时间、位置、电流强度等"
+  category: "electrical"
+  adapter:
+    type: "mcp"
+    config:
+      url: "http://localhost:8001"
+      timeout: 30
+  output_schema:
+    type: "structured"
+    fields:
+      - name: "strike_time"
+        type: "datetime"
+        description: "雷击时间"
+      - name: "longitude"
+        type: "float"
+        description: "经度"
+      - name: "latitude"
+        type: "float"
+        description: "纬度"
+      - name: "current"
+        type: "float"
+        description: "雷电流强度(kA)"
+      - name: "distance_to_line"
+        type: "float"
+        description: "距线路距离(km)"
+  report_mapping:
+    chapter: "诊断证据"
+    render_template: "table"

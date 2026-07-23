@@ -1,0 +1,28 @@
+tool:
+  name: "WindDiagnosisTool"
+  display_name: "风偏分析"
+  description: "查询线路走廊风速风向数据，分析风偏风险"
+  category: "environmental"
+  adapter:
+    type: "mcp"
+    config:
+      url: "http://localhost:8003"
+      timeout: 30
+  output_schema:
+    type: "structured"
+    fields:
+      - name: "max_wind_speed"
+        type: "float"
+        description: "最大风速(m/s)"
+      - name: "wind_direction"
+        type: "string"
+        description: "风向"
+      - name: "gust_speed"
+        type: "float"
+        description: "阵风速度(m/s)"
+      - name: "deflection_risk"
+        type: "string"
+        description: "风偏风险等级"
+  report_mapping:
+    chapter: "诊断证据"
+    render_template: "table"

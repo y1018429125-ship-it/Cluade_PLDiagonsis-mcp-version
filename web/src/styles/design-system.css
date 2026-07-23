@@ -1,0 +1,94 @@
+:root {
+  /* 背景层 - 浅色系统 */
+  --bg-base: #f8f9fa;
+  --bg-panel: #ffffff;
+  --bg-panel-glass: rgba(255, 255, 255, 0.92);
+  --bg-elevated: #f1f3f5;
+  --bg-input: #ffffff;
+
+  /* 功能色 - 工业蓝 + 精炼青 */
+  --color-primary: #2563eb;
+  --color-success: #059669;
+  --color-warning: #d97706;
+  --color-danger: #dc2626;
+  --color-accent: #0d9488;
+
+  /* 文字色 */
+  --text-primary: #1e293b;
+  --text-secondary: #475569;
+  --text-muted: #94a3b8;
+  --text-inverse: #f8f9fa;
+
+  /* 边框 */
+  --border-subtle: rgba(148, 163, 184, 0.25);
+  --border-medium: rgba(148, 163, 184, 0.4);
+  --border-glow: rgba(37, 99, 235, 0.15);
+
+  /* 字体 */
+  --font-display: "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "Noto Sans SC", sans-serif;
+  --font-mono: "JetBrains Mono", "SF Mono", "Fira Code", "Courier New", monospace;
+  --font-body: -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif;
+
+  /* 字号 */
+  --text-xs: 0.6875rem;
+  --text-sm: 0.75rem;
+  --text-base: 0.8125rem;
+  --text-md: 0.9375rem;
+  --text-lg: 1.125rem;
+  --text-xl: 1.5rem;
+  --text-2xl: 2rem;
+
+  /* 间距与圆角 */
+  --radius-sm: 0.375rem;
+  --radius-md: 0.5rem;
+  --radius-lg: 0.75rem;
+
+  /* 动效 */
+  --ease-out-expo: cubic-bezier(0.16, 1, 0.3, 1);
+  --duration-fast: 150ms;
+  --duration-normal: 250ms;
+  --duration-slow: 400ms;
+
+  /* 状态色 */
+  --status-pending: #94a3b8;
+  --status-diagnosing: #2563eb;
+  --status-modifying: #d97706;
+  --status-completed: #059669;
+}
+
+/* 全局背景 */
+.app-container {
+  background: var(--bg-base);
+  min-height: 100vh;
+  color: var(--text-primary);
+  font-family: var(--font-body);
+  font-size: var(--text-base);
+}
+
+/* 滚动条 */
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--border-medium); border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: var(--text-muted); }
+
+/* 动画 */
+@keyframes breathing {
+  0%, 100% { opacity: 1; box-shadow: 0 0 4px currentColor; }
+  50% { opacity: 0.4; box-shadow: 0 0 2px currentColor; }
+}
+
+@keyframes dot-bounce {
+  0%, 80%, 100% { transform: scale(0.6); opacity: 0.4; }
+  40% { transform: scale(1); opacity: 1; }
+}
+
+@keyframes toast-in {
+  from { transform: translateX(100%); opacity: 0; }
+  to { transform: translateX(0); opacity: 1; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .status-dot.breathing {
+    animation: none !important;
+  }
+}
