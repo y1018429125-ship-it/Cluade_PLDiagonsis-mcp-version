@@ -10,6 +10,7 @@ from src.application.commands.base import Command
 from src.domain.session_manager import SessionManager
 from src.domain.state_machine import StateMachine
 from src.domain.skill_loader import SkillLoader
+from src.domain.report_sanitizer import sanitize_report
 from src.infrastructure.llm_service import LLMService
 
 logger = logging.getLogger(__name__)
@@ -90,6 +91,8 @@ class ModifyReportCommand(Command):
             {"role": "system", "content": "你是输电线路故障诊断报告编辑专家。"},
             {"role": "user", "content": prompt},
         ])
+        # 入库前清洗 LaTeX 公式（$...$ → 纯文本），防止前端渲染乱码
+        modified_report = sanitize_report(modified_report)
 
         # 记录修改操作
         session.action_log.append(

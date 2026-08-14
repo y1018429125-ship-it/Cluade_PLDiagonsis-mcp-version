@@ -42,7 +42,7 @@ export interface DiagnosisSession {
 }
 
 export interface SSEEvent {
-  event_type: 'start' | 'thinking' | 'result' | 'content' | 'complete' | 'error' | 'status'
+  event_type: 'start' | 'thinking' | 'result' | 'content' | 'report_chunk' | 'complete' | 'error' | 'status'
   session_id: string
   payload: any
   timestamp: string
@@ -58,4 +58,5 @@ export interface ChatMessage {
   thinkingCollapsed?: boolean
   summary?: DiagnosisSummary
   report?: string
+  reportStreaming?: boolean
 }

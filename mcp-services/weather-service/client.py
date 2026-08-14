@@ -1,4 +1,4 @@
-"""HTTP client for the lightning diagnosis service."""
+"""HTTP client for the weather diagnosis service."""
 
 from __future__ import annotations
 
@@ -10,10 +10,7 @@ import httpx
 from config import BASE_URL, LOGIN_ACCOUNT, LOGIN_PASSWORD, REQUEST_TIMEOUT
 from engine_models import (
     LoginResponse,
-    TripDiagnosisResponse,
     TripInfoDataResponse,
-    TripInfoResponse,
-    TripRippleResponse,
     WeatherResponse,
 )
 
@@ -108,15 +105,15 @@ class APIClient:
 
     async def get_trip_info_data(
         self, query_date: str, line_name: str
-    ) -> TripInfoDataRecord:
-        """Query trip records for a given date and return the matching record.
+    ) -> str:
+        """Query trip records for a given date and return the matching tripId.
 
         Args:
             query_date: Date in YYYY-MM-DD format.
             line_name: Exact line name to match against tripLineName.
 
         Returns:
-            Matching TripInfoDataRecord (含 tripId、province、voltage 等字段).
+            Matching tripId.
 
         Raises:
             AuthError: If the token is invalid.
@@ -147,108 +144,48 @@ class APIClient:
 
         for record in parsed.records:
             if record.trip_line_name == line_name:
-                return record
+                return record.trip_id
 
         raise DataNotFoundError(
             f"未找到 {query_date} {line_name} 的跳闸记录"
         )
 
-    async def _fetch_with_trip_id(
-        self, path: str, trip_id: str, response_model: type
-    ) -> Any:
-        """Fetch an endpoint that only requires tripId and access_token.
+    async def get_weather(self, trip_id: str) -> WeatherResponse:
+        """Fetch weather data for the trip location.
+
+        Only the temperature (tmp) and humidity (hum) fields are consumed
+        by this service.
 
         Args:
-            path: API endpoint path.
             trip_id: Trip identifier.
-            response_model: Pydantic model class for the response.
 
         Returns:
-            Parsed response model instance.
+            Parsed getWeather response.
 
         Raises:
             AuthError: If the token is invalid.
-            APIClientError: If the API returns an error code.
         """
         if self._token is None:
             await self.login()
 
         payload = {"tripId": trip_id, "access_token": self._token}
-        raw = await self._post_form(path, payload)
-        parsed = response_model.model_validate(raw)
+        raw = await self._post_form(
+            "/tgyApiservice/tripdiagnosisservice/getWeather", payload
+        )
+        parsed = WeatherResponse.model_validate(raw)
         if str(parsed.code) == "1002":
             raise AuthError("认证已过期，请重新登录", parsed.code)
         return parsed
-
-    async def get_trip_diagnosis(self, trip_id: str) -> TripDiagnosisResponse:
-        """Fetch waveform diagnosis probabilities and rules."""
-        return await self._fetch_with_trip_id(
-            "/tgyApiservice/tripdiagnosisservice/getTripDiagnosis",
-            trip_id,
-            TripDiagnosisResponse,
-        )
-
-    async def get_trip_info(self, trip_id: str) -> TripInfoResponse:
-        """Fetch trip details and lightning flash records."""
-        return await self._fetch_with_trip_id(
-            "/tgyApiservice/lineflashtripservice/getTripInfo",
-            trip_id,
-            TripInfoResponse,
-        )
-
-    async def get_trip_ripple(self, trip_id: str) -> TripRippleResponse:
-        """Fetch raw waveform data."""
-        return await self._fetch_with_trip_id(
-            "/tgyApiservice/lineflashtripservice/getTripRipple",
-            trip_id,
-            TripRippleResponse,
-        )
-
-    async def get_weather(self, trip_id: str) -> WeatherResponse:
-        """Fetch weather data for the trip location."""
-        return await self._fetch_with_trip_id(
-            "/tgyApiservice/tripdiagnosisservice/getWeather",
-            trip_id,
-            WeatherResponse,
-        )
-
-    async def fetch_all_diagnosis_data(
-        self, trip_id: str
-    ) -> tuple[
-        TripDiagnosisResponse,
-        TripInfoResponse,
-        TripRippleResponse,
-    ]:
-        """Fetch all three diagnosis data sources in parallel.
-
-        Note: getWeather is intentionally not fetched here. The micro-weather
-        module was removed from the lightning diagnosis report; the weather
-        parameters (ws/wd/tmp/hum) are reserved for the wind and weather
-        diagnosis tools.
-
-        Args:
-            trip_id: Trip identifier.
-
-        Returns:
-            Tuple of diagnosis, trip info, and waveform responses.
-        """
-        return await asyncio.gather(
-            self.get_trip_diagnosis(trip_id),
-            self.get_trip_info(trip_id),
-            self.get_trip_ripple(trip_id),
-        )
 
 
 async def main() -> None:
     """Quick smoke test for the client."""
     client = APIClient()
     try:
-        record = await client.get_trip_info_data("2025-05-08", "雅湖线")
-        print(f"trip_id: {record.trip_id}, province: {record.province}, voltage: {record.voltage}")
-        diag, info, ripple = await client.fetch_all_diagnosis_data(record.trip_id)
-        print(f"diagnosis code: {diag.code}")
-        print(f"info code: {info.code}, flash count: {len(info.flash_list)}")
-        print(f"ripple code: {ripple.code}, waveforms: {len(ripple.waveforms)}")
+        trip_id = await client.get_trip_info_data("2025-05-08", "雅湖线")
+        print(f"trip_id: {trip_id}")
+        weather = await client.get_weather(trip_id)
+        print(f"weather code: {weather.code}, real: {weather.data.real if weather.data else None}")
     finally:
         await client.close()
 

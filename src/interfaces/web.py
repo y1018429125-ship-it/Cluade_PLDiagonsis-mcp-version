@@ -13,8 +13,10 @@ from typing import Any, Dict
 import os
 from pathlib import Path
 
+import httpx
 from flask import Flask, Response, jsonify, request, send_from_directory, stream_with_context
 
+from src.core.exceptions import SessionNotFoundError
 from src.core.models import Event, EventType, IntentType, SessionStatus
 from src.application.commands.diagnose import DiagnoseCommand
 from src.application.commands.exclude import ExcludeToolCommand
@@ -459,6 +461,62 @@ def create_app() -> Flask:
                 ]
             }
         )
+
+    @app.route("/api/history-relation", methods=["POST"])
+    def history_relation():
+        """历史关联：基于会话故障上下文动态生成两个问题，串行调用故障知识库 API"""
+        kb_url = container.config.knowledge_base.base_url.rstrip("/") + "/query"
+        body = request.get_json(silent=True) or {}
+        session_id = body.get("session_id")
+        if not session_id:
+            return jsonify({"success": False, "error": "缺少 session_id"}), 400
+        try:
+            session = container.session_manager.get(session_id)
+        except SessionNotFoundError:
+            return jsonify({"success": False, "error": f"会话不存在: {session_id}"}), 404
+
+        # 会话级缓存：问题参数来源于会话持久化数据（创建后不变），答案在会话生命周期内确定
+        if session.history_relation_cache:
+            return jsonify({
+                "success": True,
+                "sections": session.history_relation_cache,
+                "cached": True,
+            })
+
+        line = session.line_name
+        questions = [(f"一、{line}历年情况", f"{line}历年情况")]
+
+        fault_ctx = session.fault_context
+        info = fault_ctx.additional_info if fault_ctx else {}
+        province = info.get("province")
+        voltage = info.get("voltage")
+        fault_time = fault_ctx.fault_time if fault_ctx else None
+        if province and voltage and fault_time:
+            year, month = fault_time.year, fault_time.month
+            a = month - 1 if month > 1 else 1  # 舍弃跨年
+            b = month + 1 if month < 12 else 12
+            q2 = f"{province}{voltage}线路{year}年{a}-{b}月情况"
+            questions.append((f"二、{q2}", q2))
+
+        sections = []
+        try:
+            with httpx.Client(timeout=300.0) as client:
+                for title, question in questions:
+                    resp = client.post(kb_url, json={"question": question})
+                    resp.raise_for_status()
+                    sections.append({"title": title, "answer": resp.json().get("answer", "")})
+        except Exception as e:
+            logger.error(f"历史关联查询失败: {e}")
+            return jsonify({"success": False, "error": f"故障知识库查询失败: {e}"}), 502
+
+        if len(questions) == 1:
+            sections.append({
+                "title": "二、区域同期故障情况",
+                "answer": "该会话诊断时未记录省份/电压信息，无法生成此查询。重新执行一次诊断后可查看。",
+            })
+        session.history_relation_cache = sections
+        container.session_manager._persist()
+        return jsonify({"success": True, "sections": sections})
 
     @app.route("/api/sessions/<id>", methods=["GET"])
     def get_session(id: str):

@@ -50,6 +50,7 @@ class EventType(str, Enum):
     THINKING = "thinking"
     RESULT = "result"
     CONTENT = "content"
+    REPORT_CHUNK = "report_chunk"
     COMPLETE = "complete"
     ERROR = "error"
     STATUS = "status"
@@ -181,8 +182,8 @@ class UserAction(BaseModel):
 DEFAULT_WEIGHTS: Dict[str, float] = {
     "LightningDiagnosisTool": 1.0,
     "IcingDiagnosisTool": 0.9,
-    "WindDiagnosisTool": 0.8,
-    "BirdDamageDiagnosisTool": 0.6,
+    "WindDiagnosisTool": 1.0,
+    "WeatherDiagnosisTool": 1.0,
 }
 
 
@@ -211,6 +212,7 @@ class DiagnosisSession(BaseModel):
     latest_report: Optional[str] = None
     custom_strategy_name: Optional[str] = None
     chat_history: List[Dict[str, Any]] = Field(default_factory=list)
+    history_relation_cache: Optional[List[Dict[str, str]]] = None
     tool_outputs_cache: Dict[str, Any] = Field(default_factory=dict, exclude=True)
 
     def model_post_init(self, __context: Any) -> None:
@@ -258,6 +260,11 @@ class Event(BaseModel):
     @classmethod
     def content(cls, session_id: str, text: str) -> Event:
         return cls(session_id=session_id, event_type=EventType.CONTENT, payload={"text": text})
+
+    @classmethod
+    def report_chunk(cls, session_id: str, text: str) -> Event:
+        """报告流式增量块（payload.content 与前端累积逻辑约定一致）"""
+        return cls(session_id=session_id, event_type=EventType.REPORT_CHUNK, payload={"content": text})
 
     @classmethod
     def complete(cls, session_id: str, data: Dict[str, Any]) -> Event:

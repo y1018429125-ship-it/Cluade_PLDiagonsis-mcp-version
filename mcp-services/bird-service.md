@@ -1,4 +1,4 @@
-## 调用记录 — 2026-07-20 09:58:12 UTC+08:00
+## 调用记录 — 2026-08-10 14:13:41 UTC+08:00
 
 ### 请求
 
@@ -6,15 +6,15 @@
 {
   "line_name": "雅湖线",
   "voltage_level": "",
-  "fault_time": "2025-05-08T00:00:00",
+  "fault_time": "2025-05-08T19:46:00",
   "additional_info": {
-    "line_id": "sess_55f9646e",
+    "line_id": "sess_ce263a85",
     "tower_id": null,
     "weather_info": null,
     "scada_data": null,
     "wave_data": null,
     "images": null,
-    "user_input": "雅湖线2025年5月8日情况",
+    "user_input": "雅湖线2025年5月8日19时46分发生故障，请进行诊断",
     "detected_fault_types": [],
     "voltage_level": ""
   }

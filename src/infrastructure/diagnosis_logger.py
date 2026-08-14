@@ -76,12 +76,55 @@ class DiagnosisLogger:
         self._current_stage = None
 
     def record_event(self, event_type: str, payload: Optional[Dict[str, Any]] = None) -> None:
-        """记录一个 SSE 事件。"""
+        """记录一个 SSE 事件。
+
+        优化：
+        - thinking 事件：连续的累计前缀消息（后一条以前一条为前缀）合并为一条，
+          只保留最终的完整文本，避免 O(n^2) 重复记录。
+        - result 事件：工具输出中的 base64 图片替换为占位符，避免日志体积膨胀。
+        """
+        payload = payload or {}
+        if event_type == "result":
+            payload = self._strip_images(payload)
+        if (
+            event_type == "thinking"
+            and self.events
+            and self.events[-1]["event_type"] == "thinking"
+        ):
+            prev_msg = self.events[-1]["payload"].get("message", "")
+            new_msg = payload.get("message", "")
+            if prev_msg and new_msg.startswith(prev_msg):
+                self.events[-1]["payload"] = payload
+                self.events[-1]["timestamp"] = datetime.now(timezone.utc).isoformat()
+                return
+        # report_chunk 为增量 delta：连续块拼接合并为一条，防止日志膨胀
+        if (
+            event_type == "report_chunk"
+            and self.events
+            and self.events[-1]["event_type"] == "report_chunk"
+        ):
+            prev = self.events[-1]["payload"].get("content", "")
+            self.events[-1]["payload"]["content"] = prev + payload.get("content", "")
+            self.events[-1]["timestamp"] = datetime.now(timezone.utc).isoformat()
+            return
         self.events.append({
             "event_type": event_type,
             "timestamp": datetime.now(timezone.utc).isoformat(),
-            "payload": payload or {},
+            "payload": payload,
         })
+
+    @staticmethod
+    def _strip_images(payload: Dict[str, Any]) -> Dict[str, Any]:
+        """将 result 事件 payload 中的 base64 图片列表替换为占位符。"""
+        details = (
+            payload.get("output", {})
+            .get("structured_data", {})
+            .get("details", {})
+        )
+        images = details.get("images")
+        if isinstance(images, list) and images:
+            details["images"] = f"<已省略 {len(images)} 张图片，base64 未记录>"
+        return payload
 
     def record_tool_timing(
         self,

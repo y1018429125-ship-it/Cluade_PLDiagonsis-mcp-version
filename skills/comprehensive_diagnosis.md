@@ -30,8 +30,8 @@ If the gap between top two is < 0.1, list as co-primary causes.
 weights:
   LightningDiagnosisTool: 1.0
   IcingDiagnosisTool: 0.9
-  WindDiagnosisTool: 0.8
-  BirdDamageDiagnosisTool: 0.6
+  WindDiagnosisTool: 1.0
+  WeatherDiagnosisTool: 1.0
 ```
 
 ## 工具调用策略
@@ -40,9 +40,8 @@ weights:
 |------|--------|---------------|
 | LightningDiagnosisTool | 1.0 | Always call |
 | IcingDiagnosisTool | 0.9 | Call when temp ≤ 5°C or winter; otherwise skip |
-| WindDiagnosisTool | 0.8 | Always call |
-| BirdDamageDiagnosisTool | 0.6 | Always call |
-| WeatherDiagnosisTool | 0.5 | DO NOT call - currently disabled due to browser automation timeout |
+| WindDiagnosisTool | 1.0 | Always call |
+| WeatherDiagnosisTool | 1.0 | Always call |
 
 ## 诊断流程
 
@@ -62,8 +61,10 @@ weights:
 ## 注意事项
 
 - Skip icing diagnosis in summer (no significance)
-- Skip WeatherDiagnosisTool completely - it is currently disabled due to browser automation timeout
+- WeatherDiagnosisTool has no confidence; in the weighted confidence calculation chapter, compute it as 0 × its configured weight = 0 (e.g. with default weight 1.0, show 0 × 1.0 = 0); if the user adjusts the weight, use the adjusted weight
+- WindDiagnosisTool has no confidence; in the weighted confidence calculation chapter, compute it as 0 × its configured weight = 0 (e.g. with default weight 1.0, show 0 × 1.0 = 0); if the user adjusts the weight, use the adjusted weight
 - Merge evidence when multiple tools point to the same fault type
 - Prompt user when new tools are available
 - Fault time must be millisecond-precise: YYYY-MM-DD HH:MM:SS.mmm
 - Report conclusion must show weighted confidence calculation for each tool
+- 数学表达必须使用纯文本符号（×、≤、≥、°、±、%），禁止使用 LaTeX `$...$` 语法。例如写 `0.985 × 1.0 = 0.985`，不要写 `$0.985 \times 1.0$`

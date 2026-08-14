@@ -1,6 +1,7 @@
 tool:
   name: "BirdDamageDiagnosisTool"
   display_name: "鸟害监测"
+  enabled: false
   description: "查询线路走廊鸟类活动数据，分析鸟害风险"
   category: "biological"
   adapter:

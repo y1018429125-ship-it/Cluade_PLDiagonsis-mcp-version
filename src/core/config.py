@@ -61,6 +61,13 @@ class ToolsConfig(BaseSettings):
     auto_load: bool = True
 
 
+class KnowledgeBaseConfig(BaseSettings):
+    """故障知识库配置（历史关联数据源）"""
+    model_config = SettingsConfigDict(env_prefix="KB_", extra="ignore")
+
+    base_url: str = "http://localhost:8503"
+
+
 class AppConfig(BaseSettings):
     """应用总配置"""
     model_config = SettingsConfigDict(
@@ -75,6 +82,7 @@ class AppConfig(BaseSettings):
     report: ReportConfig = Field(default_factory=ReportConfig)
     session: SessionConfig = Field(default_factory=SessionConfig)
     tools: ToolsConfig = Field(default_factory=ToolsConfig)
+    knowledge_base: KnowledgeBaseConfig = Field(default_factory=KnowledgeBaseConfig)
 
     debug: bool = False
     log_level: str = "INFO"

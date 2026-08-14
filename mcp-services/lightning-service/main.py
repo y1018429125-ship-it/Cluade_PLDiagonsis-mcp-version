@@ -96,9 +96,10 @@ async def diagnose(req: DiagnoseRequest) -> DiagnoseResponse:
     client = APIClient()
     try:
         query_date = _extract_query_date(req.fault_time, req.additional_info or {})
-        trip_id = await client.get_trip_info_data(query_date, req.line_name)
-        diagnosis, info, ripple, weather = await client.fetch_all_diagnosis_data(trip_id)
-        report = build_report(diagnosis, info, ripple, weather)
+        trip_record = await client.get_trip_info_data(query_date, req.line_name)
+        trip_id = trip_record.trip_id
+        diagnosis, info, ripple = await client.fetch_all_diagnosis_data(trip_id)
+        report = build_report(diagnosis, info, ripple)
 
         fault_type, confidence = _extract_fault_type_and_confidence(report["markdown"])
 
@@ -124,6 +125,8 @@ async def diagnose(req: DiagnoseRequest) -> DiagnoseResponse:
             "details": {
                 "query_date": query_date,
                 "trip_id": trip_id,
+                "province": trip_record.province,
+                "voltage": trip_record.voltage,
                 "images": image_b64_list,
                 "module_scores": [
                     {

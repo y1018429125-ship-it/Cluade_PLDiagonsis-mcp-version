@@ -51,6 +51,11 @@ class ToolRegistry:
         with open(config_file, "r", encoding="utf-8") as f:
             data = yaml.safe_load(f)
 
+        # enabled: false 的工具跳过注册（诊断与前端均不可见）
+        if not data["tool"].get("enabled", True):
+            logger.info(f"工具已禁用，跳过注册: {data['tool'].get('name')} ({config_file.name})")
+            return
+
         tool_config = ToolConfig.model_validate(data["tool"])
         self._configs[tool_config.name] = tool_config
 

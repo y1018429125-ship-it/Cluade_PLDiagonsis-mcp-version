@@ -2,14 +2,17 @@
 import { ref, nextTick, watch } from 'vue'
 import { useSessionStore } from '@/stores/sessionStore'
 import { renderMarkdown } from '@/utils/markdown'
-import { createSkill } from '@/api/http'
-import { formatTime } from '@/utils/time'
+import { createSkill, getHistoryRelation } from '@/api/http'
+import { formatDate } from '@/utils/time'
 import 'katex/dist/katex.min.css'
 
 const store = useSessionStore()
 const input = ref('')
 const listRef = ref<HTMLDivElement | null>(null)
 const reportExpanded = ref<Record<string, boolean>>({})
+const historyExpanded = ref<Record<string, boolean>>({})
+const historyLoading = ref<Record<string, boolean>>({})
+const historyData = ref<Record<string, string>>({})
 const showCompletionReview = ref(false)
 const reviewSessionId = ref<string | null>(null)
 const showModifyInput = ref(false)
@@ -26,6 +29,27 @@ function toggleReport(msgId: string) {
   reportExpanded.value[msgId] = !reportExpanded.value[msgId]
 }
 
+function toggleHistory(msgId: string) {
+  historyExpanded.value[msgId] = !historyExpanded.value[msgId]
+  const sid = store.activeSessionId ?? ''
+  if (historyExpanded.value[msgId] && sid && !historyData.value[sid] && !historyLoading.value[sid]) {
+    loadHistory(sid)
+  }
+}
+
+async function loadHistory(sid: string) {
+  historyLoading.value[sid] = true
+  try {
+    const res = await getHistoryRelation(sid)
+    const md = res.sections.map((s) => `## ${s.title}\n\n${s.answer}`).join('\n\n')
+    historyData.value[sid] = renderMarkdown(md)
+  } catch {
+    historyData.value[sid] = '<p>历史关联查询失败，请稍后重试。</p>'
+  } finally {
+    historyLoading.value[sid] = false
+  }
+}
+
 function getActionLogForReview(): Array<{ action_type: string; tool_name: string; description: string; weight?: number }> {
   const sid = reviewSessionId.value
   if (!sid) return []
@@ -36,10 +60,19 @@ function getActionLogForReview(): Array<{ action_type: string; tool_name: string
 
 watch(() => store.messages.length, scrollToBottom)
 watch(() => store.messages.map((m) => m.content), scrollToBottom, { deep: true })
+// 报告流式期间面板展开时跟随滚动
+watch(
+  () => store.messages.map((m) => (reportExpanded.value[m.id] ? m.report : '')),
+  scrollToBottom,
+  { deep: true }
+)
 watch(() => store.activeSessionId, () => {
   showCompletionReview.value = false
   reviewSessionId.value = null
   reportExpanded.value = {}
+  historyExpanded.value = {}
+  historyLoading.value = {}
+  historyData.value = {}
 })
 
 // 自动展开修改报告后的诊断卡片
@@ -47,15 +80,24 @@ watch(() => store.messages, (newMessages, oldMessages) => {
   const oldLen = oldMessages?.length ?? 0
   if (newMessages.length > oldLen) {
     const lastMsg = newMessages[newMessages.length - 1]
-    if (
-      lastMsg.role === 'assistant'
-      && lastMsg.summary
-      && lastMsg.report
-      && lastMsg.eventType === 'complete'
-      && lastMsg.content?.includes('修改')
-    ) {
-      reportExpanded.value[lastMsg.id] = true
-      scrollToBottom()
+    if (lastMsg.role === 'assistant' && lastMsg.summary && lastMsg.report && lastMsg.eventType === 'complete') {
+      // 诊断卡片生成后立即后台预取历史关联（不展开面板），用户点击时若已就绪则秒开
+      const sid = store.activeSessionId ?? ''
+      if (sid && !historyData.value[sid] && !historyLoading.value[sid]) {
+        loadHistory(sid)
+      }
+      if (lastMsg.content?.includes('修改')) {
+        reportExpanded.value[lastMsg.id] = true
+        scrollToBottom()
+      }
+    }
+  }
+  // 报告流式开始（首个 report_chunk）即后台预取历史关联，与报告生成并行
+  const lastMsg = newMessages[newMessages.length - 1]
+  if (lastMsg?.role === 'assistant' && lastMsg.reportStreaming) {
+    const sid = store.activeSessionId ?? ''
+    if (sid && !historyData.value[sid] && !historyLoading.value[sid]) {
+      loadHistory(sid)
     }
   }
 }, { deep: true })
@@ -205,6 +247,24 @@ function submitModifyReport() {
             <span>诊断中...</span>
           </div>
 
+          <!-- Report streaming state：报告逐字生成中，可随时点击查看进度 -->
+          <div
+            v-else-if="msg.role === 'assistant' && msg.reportStreaming"
+            class="summary-card"
+          >
+            <div class="summary-header">正在生成诊断报告<span class="streaming-cursor">▍</span></div>
+            <div class="report-section">
+              <button class="view-report-btn" @click="toggleReport(msg.id)">
+                {{ reportExpanded[msg.id] ? '收起报告' : '查看报告（生成中…）' }}
+              </button>
+              <div
+                v-if="reportExpanded[msg.id]"
+                class="report-content markdown-body"
+                v-html="renderMarkdown(msg.report ?? '')"
+              ></div>
+            </div>
+          </div>
+
           <!-- Complete state with summary card -->
           <div v-else-if="msg.role === 'assistant' && msg.summary" class="summary-card">
             <div class="summary-header">诊断完成</div>
@@ -219,7 +279,7 @@ function submitModifyReport() {
               </div>
               <div v-if="msg.summary.fault_time" class="summary-row">
                 <span class="summary-label">故障时间</span>
-                <span class="summary-value time">{{ formatTime(msg.summary.fault_time) }}</span>
+                <span class="summary-value time">{{ formatDate(msg.summary.fault_time) }}</span>
               </div>
               <div class="summary-row">
                 <span class="summary-label">故障类型</span>
@@ -253,7 +313,14 @@ function submitModifyReport() {
               <button class="view-report-btn" @click="toggleReport(msg.id)">
                 {{ reportExpanded[msg.id] ? '收起报告' : '查看报告' }}
               </button>
+              <button class="view-report-btn history-btn" @click="toggleHistory(msg.id)">
+                {{ historyExpanded[msg.id] ? '收起' : '历史关联' }}
+              </button>
               <div v-if="reportExpanded[msg.id]" class="report-content markdown-body" v-html="renderMarkdown(msg.report)"></div>
+              <div v-if="historyExpanded[msg.id]" class="report-content history-content">
+                <div v-if="historyLoading[store.activeSessionId ?? '']" class="history-loading">正在查询故障知识库，约需 1-2 分钟，请稍候…</div>
+                <div v-else class="markdown-body" v-html="historyData[store.activeSessionId ?? '']"></div>
+              </div>
             </div>
             <div class="summary-actions">
               <button
@@ -687,6 +754,18 @@ function submitModifyReport() {
   transition: all var(--duration-fast);
 }
 
+.streaming-cursor {
+  display: inline-block;
+  margin-left: 0.25rem;
+  color: var(--color-primary);
+  animation: streaming-blink 1s step-end infinite;
+}
+
+@keyframes streaming-blink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0; }
+}
+
 .view-report-btn:hover {
   background: var(--border-subtle);
   border-color: var(--color-primary);
@@ -816,6 +895,19 @@ function submitModifyReport() {
   border-radius: var(--radius-md);
   max-height: 400px;
   overflow-y: auto;
+}
+
+.history-btn {
+  margin-left: 0.5rem;
+}
+
+.history-content {
+  min-height: 120px;
+}
+
+.history-loading {
+  color: var(--text-secondary);
+  font-size: var(--text-sm);
 }
 
 /* Completion review panel */

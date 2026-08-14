@@ -1,40 +1,28 @@
 tool:
   name: "WeatherDiagnosisTool"
-  display_name: "天气诊断"
-  description: "通过浏览器访问百度查询指定城市天气状况，包括温度、湿度、天气状况、风向风力等"
+  display_name: "微气象诊断"
+  description: "查询线路走廊故障时刻的温度和湿度数据，分析气象环境条件"
   category: "environmental"
   adapter:
-    type: "custom"
+    type: "mcp"
     config:
-      module: "src.infrastructure.adapters.browser_agent_adapter"
-      class: "BrowserAgentAdapter"
-      # demo 阶段固定查询城市
-      default_city: "武汉"
-      # 浏览器配置
-      headless: true
-      max_steps: 10
-      step_timeout: 30
+      url: "http://localhost:8005"
+      timeout: 30
   output_schema:
     type: "structured"
     fields:
-      - name: "city"
-        type: "string"
-        description: "城市名"
-      - name: "temperature"
+      - name: "temperature_c"
         type: "float"
-        description: "温度(°C)"
-      - name: "humidity"
+        description: "故障时刻温度(°C)"
+      - name: "humidity_pct"
         type: "float"
-        description: "湿度(%)"
-      - name: "condition"
+        description: "故障时刻湿度(%)"
+      - name: "humidity_description"
         type: "string"
-        description: "天气状况"
-      - name: "wind_direction"
-        type: "string"
-        description: "风向"
-      - name: "wind_level"
-        type: "string"
-        description: "风力等级"
+        description: "湿度级别语言描述"
+      - name: "details"
+        type: "object"
+        description: "附加信息（query_date、trip_id）"
   report_mapping:
     chapter: "诊断证据"
     render_template: "table"

@@ -121,6 +121,18 @@ export function completeSession(sessionId: string) {
   )
 }
 
+export interface HistoryRelationSection {
+  title: string
+  answer: string
+}
+
+export function getHistoryRelation(sessionId: string) {
+  return request<{ success: boolean; sections: HistoryRelationSection[] }>(
+    '/api/history-relation',
+    { method: 'POST', body: JSON.stringify({ session_id: sessionId }) }
+  )
+}
+
 export interface FrontendLogPayload {
   session_id: string
   frontend_log: {

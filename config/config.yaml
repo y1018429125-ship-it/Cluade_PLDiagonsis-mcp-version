@@ -42,3 +42,6 @@ session:
 tools:
   config_directory: config/tools
   auto_load: true
+
+knowledge_base:
+  base_url: http://localhost:8503

@@ -13,7 +13,6 @@ from engine_models import (
     TripDiagnosisResponse,
     TripInfoResponse,
     TripRippleResponse,
-    WeatherResponse,
 )
 
 
@@ -25,8 +24,9 @@ def _format(value: float) -> str:
 # Fixed weight labels shown with two decimal places per the document examples.
 _WEIGHT_LABELS = {
     0.30: "0.30",
+    0.35: "0.35",
+    0.20: "0.20",
     0.15: "0.15",
-    0.10: "0.10",
 }
 
 
@@ -210,7 +210,7 @@ def analyze_module1(
 def analyze_module2(info: TripInfoResponse) -> ModuleResult:
     """Analyze distributed monitoring evidence (module 2)."""
     title = "模块二：分布式监测判定"
-    weight = 0.15
+    weight = 0.20
 
     if str(info.code) != "1001" or info.trip is None:
         return ModuleResult(
@@ -263,7 +263,7 @@ def analyze_module3(info: TripInfoResponse) -> tuple[ModuleResult, ModuleResult]
     title31 = "3.1：雷电活动规模"
     weight31 = 0.15
     title32 = "3.2：雷电活动定位"
-    weight32 = 0.30
+    weight32 = 0.35
 
     if (
         str(info.code) != "1001"
@@ -408,75 +408,10 @@ def analyze_module3(info: TripInfoResponse) -> tuple[ModuleResult, ModuleResult]
     return result31, result32
 
 
-def analyze_module4(weather: WeatherResponse) -> ModuleResult:
-    """Analyze weather conditions (module 4)."""
-    title = "模块四：微气象"
-    weight = 0.10
-
-    if (
-        str(weather.code) != "1001"
-        or weather.data is None
-        or weather.data.real is None
-    ):
-        return ModuleResult(
-            title=title,
-            markdown=f"## {title}\n\ngetWeather 接口数据同步异常，该模块置信度贡献为 0。\n",
-            support_score=0.0,
-            weight=weight,
-            contribution=0.0,
-            conclusion="数据异常",
-            error="getWeather 接口数据同步异常",
-        )
-
-    real = weather.data.real
-    hum = real.hum
-    tmp = real.tmp
-    ws = real.ws
-
-    if hum > 70.0:
-        support_score = 1.0
-        conclusion_text = "空气极为潮湿，有利于雷暴形成条件"
-    elif hum >= 40.0:
-        support_score = 0.8
-        conclusion_text = "空气较为潮湿，符合雷暴形成条件"
-    else:
-        support_score = 0.0
-        conclusion_text = "空气干燥，不符合雷暴形成条件"
-
-    contribution = support_score * weight
-
-    markdown = f"""## {title}
-
-### 故障时刻微气象信息
-
-- 温度：{_format(tmp)} °C
-- 风速：{_format(ws)} m/s
-- 湿度：{_format(hum)}%
-
-### 微气象分析
-
-该区域故障时刻湿度为 **{_format(hum)}%**，{conclusion_text}。
-
-### 置信度贡献
-
-权重 {_weight_label(weight)} × 支撑度 {_format(support_score)} = {_format(contribution)}
-"""
-
-    return ModuleResult(
-        title=title,
-        markdown=markdown,
-        support_score=support_score,
-        weight=weight,
-        contribution=contribution,
-        conclusion=conclusion_text,
-    )
-
-
 def build_report(
     diagnosis: TripDiagnosisResponse,
     info: TripInfoResponse,
     ripple: TripRippleResponse,
-    weather: WeatherResponse,
 ) -> dict[str, Any]:
     """Build the complete diagnosis report.
 
@@ -484,7 +419,6 @@ def build_report(
         diagnosis: getTripDiagnosis response.
         info: getTripInfo response.
         ripple: getTripRipple response.
-        weather: getWeather response.
 
     Returns:
         Dict with markdown report, images, total confidence, and modules.
@@ -493,9 +427,8 @@ def build_report(
     module1 = analyze_module1(diagnosis, pressure)
     module2 = analyze_module2(info)
     module31, module32 = analyze_module3(info)
-    module4 = analyze_module4(weather)
 
-    modules = [module1, module2, module31, module32, module4]
+    modules = [module1, module2, module31, module32]
     total_confidence = sum(m.contribution for m in modules)
     final_conclusion = module1.conclusion
 
@@ -505,15 +438,14 @@ def build_report(
 - 模块二（分布式监测判定）：{module2.conclusion}，置信度贡献 {_format(module2.contribution)}
 - 模块三3.1（雷电活动规模）：{module31.conclusion}，置信度贡献 {_format(module31.contribution)}
 - 模块三3.2（雷电活动定位）：{module32.conclusion}，置信度贡献 {_format(module32.contribution)}
-- 模块四（微气象）：{module4.conclusion}，置信度贡献 {_format(module4.contribution)}
 
-基于 5 个证据条目的交叉验证，最终诊断结论为：{final_conclusion}，综合置信度为{_format(total_confidence)}
+基于 4 个证据条目的交叉验证，最终诊断结论为：{final_conclusion}，综合置信度为{_format(total_confidence)}
 """
 
     markdown = (
         f"# 雷电故障诊断报告\n\n{module1.markdown}\n\n{module2.markdown}\n\n"
         f"## 模块三：雷电定位系统分析\n\n{module31.markdown}\n\n{module32.markdown}\n\n"
-        f"{module4.markdown}\n\n{summary}"
+        f"{summary}"
     )
 
     # Prepare images only when module 1 has data.

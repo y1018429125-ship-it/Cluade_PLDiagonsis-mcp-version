@@ -1,5 +1,5 @@
 import { defineStore } from 'pinia'
-import { ref, computed } from 'vue'
+import { ref, computed, reactive } from 'vue'
 import type { DiagnosisSession, ChatMessage, DiagnosisSummary } from '@/types'
 import {
   getSessions,
@@ -115,13 +115,15 @@ export const useSessionStore = defineStore('session', () => {
     isLoading.value = true
     error.value = null
 
-    const assistantMsg: ChatMessage = {
+    // 必须用 reactive 包装：流式期间的每次 mutation 都要通过响应式代理触发界面重渲染，
+    // 否则普通对象的变更要到 isLoading 变化时才被界面感知（流式失效的根因）
+    const assistantMsg = reactive<ChatMessage>({
       id: crypto.randomUUID(),
       role: 'assistant',
       content: '',
       eventType: 'start',
       timestamp: new Date().toISOString(),
-    }
+    })
     messages.value.push(assistantMsg)
 
     // 前端时间线：记录发送、开始接收、各事件到达时间
@@ -149,6 +151,10 @@ export const useSessionStore = defineStore('session', () => {
           assistantMsg.thinking = msg
         } else if (event.event_type === 'result' || event.event_type === 'content') {
           assistantMsg.content += event.payload?.content ?? ''
+        } else if (event.event_type === 'report_chunk') {
+          // 报告流式增量：累积到 report，标记生成中（complete 时用最终全文覆盖）
+          assistantMsg.report = (assistantMsg.report ?? '') + (event.payload?.content ?? '')
+          assistantMsg.reportStreaming = true
         } else if (event.event_type === 'status') {
           const payloadStatus = event.payload?.status
           const validStatuses: DiagnosisSession['status'][] = ['pending', 'diagnosing', 'modifying', 'completed', 'excluded', 'rechecking']
@@ -172,6 +178,7 @@ export const useSessionStore = defineStore('session', () => {
           if (event.payload?.report) {
             assistantMsg.report = event.payload.report as string
           }
+          assistantMsg.reportStreaming = false
           // 同步操作记录到会话列表
           const actions = event.payload?.summary?.action_log ?? event.payload?.action_log
           if (actions && event.session_id) {

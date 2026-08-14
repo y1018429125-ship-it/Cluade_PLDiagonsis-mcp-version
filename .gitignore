@@ -51,3 +51,15 @@ package-lock.json
 # Build artifacts
 dist/
 *.egg-info/
+
+# macOS
+.DS_Store
+
+# Logs & PID
+*.log
+*.pid
+logs/
+
+# 旧版备份（本地保留，不上传）
+mcp-services/weather-service（旧版）/
+mcp-services/wind-service（旧版）/

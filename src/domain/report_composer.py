@@ -12,6 +12,7 @@ from typing import Any, Dict, Optional
 from src.core.models import FaultContext, ToolOutput
 from src.infrastructure.llm_service import LLMService
 from src.domain.skill_loader import SkillLoader
+from src.domain.report_sanitizer import sanitize_report
 
 logger = logging.getLogger(__name__)
 
@@ -79,6 +80,16 @@ class ReportComposer:
             logger.error(f"会话 {session_id} 报告生成失败: {e}")
             raise
 
+        return self.finalize_response(response, tool_outputs, fault_context, action_log)
+
+    def finalize_response(
+        self,
+        response: str,
+        tool_outputs: Dict[str, ToolOutput],
+        fault_context: Optional[FaultContext] = None,
+        action_log: Optional[list[dict]] = None,
+    ) -> Dict[str, Any]:
+        """报告收尾：格式清洗 + 摘要提取（compose/compose_stream 共用）。"""
         formatted = self._format_response(response)
         summary = self._extract_summary(tool_outputs)
         if fault_context:
@@ -91,6 +102,40 @@ class ReportComposer:
             summary["action_log"] = action_log
 
         return {"summary": summary, "report": formatted}
+
+    async def compose_stream(
+        self,
+        tool_outputs: Dict[str, ToolOutput],
+        template: Optional[Any],
+        session_id: str,
+        fault_context: Optional[FaultContext] = None,
+        action_log: Optional[list[dict]] = None,
+        weights: Optional[Dict[str, float]] = None,
+        active_template_name: Optional[str] = None,
+        active_skill_name: Optional[str] = None,
+    ):
+        """流式撰写诊断报告，逐块 yield LLM 输出增量。
+
+        与 compose() 使用完全相同的 prompt 构建逻辑；调用方负责累积全文、
+        清洗（sanitize）和提取 summary。
+        """
+        template_md = self._load_template_md(active_template_name)
+
+        skill_md = ""
+        if self.skill_loader and active_skill_name:
+            skill_md, _ = self.skill_loader.load(active_skill_name)
+
+        prompt = self._build_prompt(
+            tool_outputs, fault_context, action_log, weights, template_md, skill_md
+        )
+
+        messages = [
+            {"role": "system", "content": "你是输电线路故障诊断报告撰写专家。"},
+            {"role": "user", "content": prompt},
+        ]
+
+        async for delta in self.llm.stream_chat(messages):
+            yield delta
 
     def _load_template_md(self, template_name: Optional[str]) -> str:
         """加载激活模板的 Markdown 内容。"""
@@ -179,9 +224,21 @@ class ReportComposer:
             if output.raw_text:
                 lines.append(f"原始文本：\n{output.raw_text}")
             if output.structured_data:
+                # base64 图片对文字报告无用，替换为占位说明，避免数万 token 的 prefill 浪费
+                # （浅拷贝处理，不影响会话缓存/SSE 事件中的原始数据）
+                data = output.structured_data
+                details = data.get("details")
+                if isinstance(details, dict) and isinstance(details.get("images"), list):
+                    data = {
+                        **data,
+                        "details": {
+                            **details,
+                            "images": f"<{len(details['images'])} 张图片，文字报告未使用，已省略>",
+                        },
+                    }
                 lines.append(
                     f"结构化数据：\n```json\n"
-                    f"{json.dumps(output.structured_data, ensure_ascii=False, indent=2)}"
+                    f"{json.dumps(data, ensure_ascii=False, indent=2)}"
                     f"\n```"
                 )
             lines.append("")
@@ -223,6 +280,7 @@ class ReportComposer:
             "3. 基于提供的诊断数据进行分析",
             "4. 使用 Markdown 格式输出",
             "5. 诊断结论中必须列出每个工具的加权置信度计算过程",
+            "6. 数学表达必须使用纯文本符号（×、≤、≥、°、±、%），禁止使用 LaTeX `$...$` 语法",
         ])
 
         return "\n".join(lines)
@@ -230,8 +288,9 @@ class ReportComposer:
     def _format_response(self, response: str) -> str:
         stripped = response.strip()
         if not stripped.startswith("# "):
-            return f"# 输电线路故障诊断报告\n\n{stripped}"
-        return stripped
+            stripped = f"# 输电线路故障诊断报告\n\n{stripped}"
+        # 入库前清洗 LaTeX 公式（$...$ → 纯文本），防止前端渲染乱码
+        return sanitize_report(stripped)
 
     def _extract_summary(
         self, tool_outputs: Dict[str, ToolOutput]

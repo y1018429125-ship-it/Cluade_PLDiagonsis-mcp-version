@@ -95,6 +95,12 @@ class Container:
                 if hasattr(self.config.tools, key):
                     setattr(self.config.tools, key, value)
 
+        # 合并 knowledge_base 配置
+        if "knowledge_base" in data:
+            for key, value in data["knowledge_base"].items():
+                if hasattr(self.config.knowledge_base, key):
+                    setattr(self.config.knowledge_base, key, value)
+
     async def init(self) -> None:
         """初始化容器"""
         await self.tool_registry.load_tools()

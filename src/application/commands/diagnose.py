@@ -214,6 +214,22 @@ class DiagnoseCommand(Command):
         for name, output in new_outputs.items():
             session.tool_outputs_cache[name] = output
 
+        # 从雷电工具输出提取省份/电压存入会话故障上下文（幂等，供历史关联使用）
+        lightning_output = tool_outputs.get("LightningDiagnosisTool")
+        if lightning_output and session.fault_context is not None:
+            details = (lightning_output.structured_data or {}).get("details", {})
+            info = session.fault_context.additional_info
+            newly_added = False
+            if details.get("province"):
+                newly_added = newly_added or "province" not in info
+                info["province"] = details["province"]
+            if details.get("voltage"):
+                newly_added = newly_added or "voltage" not in info
+                info["voltage"] = details["voltage"]
+            # 老会话补齐字段后，此前缓存的兜底历史关联答案需作废重查
+            if newly_added:
+                session.history_relation_cache = None
+
         _log_stage_end("execute_tools", {"tool_count": len(tool_outputs)})
 
         # 8. 输出每个工具的结果
@@ -236,17 +252,23 @@ class DiagnoseCommand(Command):
             for a in session.action_log
         ]
         compose_start = time.perf_counter()
-        composed = await self.report_composer.compose(
+        report_parts: list[str] = []
+        async for delta in self.report_composer.compose_stream(
             tool_outputs, None, session.session_id, fault_context, action_log_data,
             weights=session.active_weights,
             active_template_name=session.active_template_name,
             active_skill_name=session.active_skill_name,
-        )
+        ):
+            report_parts.append(delta)
+            yield Event.report_chunk(session.session_id, delta)
         compose_end = time.perf_counter()
         if diag_logger:
             diag_logger.record_tool_timing(
                 "report_composer", compose_start, compose_end, success=True
             )
+        composed = self.report_composer.finalize_response(
+            "".join(report_parts), tool_outputs, fault_context, action_log_data
+        )
         report = composed["report"]
         summary = composed["summary"]
         session.latest_report = report
